@@ -1,0 +1,145 @@
+---
+title: "US Accidents"
+author: "Jordan Burton"
+date: "February 17, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(maps)
+library(mapproj)
+library(tidyverse)
+```
+
+```{r include=FALSE}
+accidents <- read.csv("US_Accidents_Dec19.csv", header = TRUE)
+#write.table(accidents, file = "US_Accidents_Dec19.txt", sep = "\t", row.names = FALSE, col.names = TRUE)
+str(accidents)
+head(accidents)
+set.seed(2020)
+test <- accidents[sample(nrow(accidents), 100000),]
+head(test)
+str(test)
+```
+
+```{r include=FALSE}
+#attach(accidents)
+#plot(y = Severity, x = State)
+#plot(x=Start_Lng, y = Start_Lat, col = State)
+#detach(accidents)
+usa <- map_data('usa')
+#ggplot(accidents, aes(x=Start_Lng, y = Start_Lat, col = State))+
+ # geom_point(alpha=.5) + 
+  #theme(legend.position = "none") #+
+  #geom_map(data = usa, map = usa)
+```
+
+```{r include=FALSE}
+Michigan <- accidents[accidents$State == "MI",]
+#write.table(Michigan, file = "Michigan_Accidents_Dec19.txt", sep = "\t", row.names = FALSE, col.names = TRUE)
+#head(Michigan)
+#str(Michigan)
+#attach(Michigan)
+#plot(x= Start_Lng, y = Start_Lat, col = County)
+#plot(x = Severity, y = Temperature.F.)
+#detach(Michigan)
+#states_map <- map_data("state")
+#ggplot(Michigan, aes(x=Start_Lng, y = Start_Lat, col = County))+
+ # geom_point(alpha=.5) +
+  #theme(legend.position = "none") +
+  #coord_quickmap()#+ 
+  #geom_map(map =states_map, map_id = "Michigan") + 
+  #expand_limits(x=states_map$long, y = states_map$lat)
+```
+
+```{r include=FALSE}
+census <- read.csv("acs2017_county_data.csv", header = TRUE)
+head(census)
+census <- census %>%
+  mutate(County = as.character(census$County)) %>%
+  mutate(County = str_remove(census$County, " County"))
+Michigancensus <- census[census$State == "Michigan",]
+head(Michigancensus)
+str(Michigancensus)
+```
+
+```{r include=FALSE}
+accidentsbycounty <- accidents %>%
+  group_by(County) %>%
+  summarize(n())
+USAccidents <- full_join(accidentsbycounty, census, by = "County")
+names(USAccidents) <- c("County", "Accidents")
+MichiganAccidents <- Michigan %>%
+  group_by(County) %>%
+  summarize(n())
+names(MichiganAccidents) <- c("County", "Accidents")
+MichiganAccidents <- full_join(Michigancensus, MichiganAccidents,  by = "County")
+head(MichiganAccidents)
+head(USAccidents)
+```
+
+```{r}
+ggplot(MichiganAccidents, aes(x = County, y = Accidents, col = TotalPop, fill = TotalPop)) + 
+  geom_col() + 
+  scale_y_log10()
+```
+
+
+```{r}
+accidentsbystate <- accidents %>%
+  group_by(as.character(State)) %>%
+  summarize(n())
+names(accidentsbystate) <- c("Abbreviation", "Accidents")
+states <- read.delim('states.txt', stringsAsFactors = FALSE, sep = ",", header = TRUE)
+accidentsbystate <- accidentsbystate %>%
+  inner_join(states, by = "Abbreviation")
+accidentsbystate$region <- tolower(accidentsbystate$State)
+accidentsbystate <- accidentsbystate[,c("region", "Accidents")]
+state <- map_data("state")
+accidents_state_map <- left_join(state, accidentsbystate, by = "region")
+ggplot(accidents_state_map, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill = log10(Accidents)), color = "white")
+```
+
+Total accidents per state over the course of the dataset.
+
+```{r}
+county_map <- map_data("county")
+names(accidentsbycounty) <- c("subregion", "Accidents")
+accidentsbycounty$subregion <- tolower(as.character(accidentsbycounty$subregion))
+accidents_county_map <- left_join(county_map, accidentsbycounty, by = "subregion")
+
+ggplot(accidents_county_map, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill = log10(Accidents)), color = "white")
+```
+
+```{r}
+Michigan_county_map <- filter(accidents_county_map, region == "michigan")
+
+MI1 <- ggplot(Michigan_county_map, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill = log10(Accidents)), color = "white")
+MI1
+```
+
+Accidents by county in Michigan over the course of the dataset.
+
+```{r}
+MIcensus_acc <- MichiganAccidents[,c("County","TotalPop", "Accidents")]
+MIcensus_acc$subregion <- tolower(MIcensus_acc$County)
+
+MIcensus_acc <- left_join(Michigan_county_map, MIcensus_acc, by = "subregion")
+MI2 <- ggplot(MIcensus_acc, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill = log10(TotalPop)), color = "white")
+MI2
+```
+
+County Population MI 2017 Estimate.
+
+
