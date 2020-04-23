@@ -2,6 +2,7 @@ library(caret)
 library(nnet)
 
 # Data, Set Severity as an odrinal variable
+MI_accidents <- read.delim("Michigan_Accidents_Dec19.txt")
 MI_accidents$Severity <- as.ordered(MI_accidents$Severity)
 str(MI_accidents)
 dim(MI_accidents)
@@ -85,3 +86,4 @@ plot(Effect(focal.predictors = c("Distance.mi.","Start_Lat"), ordmod), rug=FALSE
 plot(Effect(focal.predictors = c("Distance.mi.","Start_Lng"), ordmod), rug=FALSE)
 plot(Effect(focal.predictors = c("Distance.mi.","Side"), ordmod), rug=FALSE)
 plot(Effect(focal.predictors = c("Distance.mi.","Crossing"), ordmod), rug=FALSE)
+
