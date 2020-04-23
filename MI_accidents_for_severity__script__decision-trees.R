@@ -1,6 +1,6 @@
-# Readable version of Rattle code. 
-# Includes shallow tree with depth of 7 terminal nodes 
-# Pruned maximum depth tree for comparison with 726 terminal nodes after pruning
+# Readable version of Rattle code
+# Decision tree model
+
 
 library(rattle)   # Access the weather dataset and utilities.
 library(magrittr) # Utilise %>% and %<>% pipeline operators.
@@ -23,10 +23,10 @@ crv$seed <- 42
 #=======================================================================
 # Load a dataset from file.
 
-fname         <- "file:///C:/Users/David/OneDrive/Desktop/DSA6000/DS6000/MI_accidents_for_severity_.csv" 
+fname         <- "file:///MI_accidents_for_severity_.csv" 
 crs$dataset <- read.csv(fname,
-			na.strings=c(".", "NA", "", "?"),
-			strip.white=TRUE, encoding="UTF-8")
+                        na.strings=c(".", "NA", "", "?"),
+                        strip.white=TRUE, encoding="UTF-8")
 
 #=======================================================================
 
@@ -56,13 +56,13 @@ crs$nobs %>%
   seq_len() %>%
   setdiff(crs$train) %>%
   sample(0.15*crs$nobs) ->
-crs$validate
+  crs$validate
 
 crs$nobs %>%
   seq_len() %>%
   setdiff(crs$train) %>%
   setdiff(crs$validate) ->
-crs$test
+  crs$test
 
 # The following variable selections have been noted.
 
@@ -100,44 +100,43 @@ set.seed(crv$seed)
 # Build the Decision Tree model.
 
 crs$rpart <- rpart(Severity ~ .,
-    data=crs$dataset[crs$train, c(crs$input, crs$target)],
-    method="class",
-    parms=list(split="information"),
-    control=rpart.control(usesurrogate=0, 
-        maxsurrogate=0),
-    model=TRUE)
+                   data=crs$dataset[crs$train, c(crs$input, crs$target)],
+                   method="class",
+                   parms=list(split="information"),
+                   control=rpart.control(usesurrogate=0, 
+                                         maxsurrogate=0),
+                   model=TRUE)
 
 # Generate a textual view of the Decision Tree model.
 
 print(crs$rpart)
 printcp(crs$rpart)
 
+# Select the complexity parameter "CP" for the minimum cross-validation error "xerror". Inspect number of nodes at that minimum.
 crs$rpart$cptable[which.min(crs$rpart$cptable[,"xerror"]),"CP"]
 crs$rpart$cptable[which.min(crs$rpart$cptable[,"xerror"]),"nsplit"]
 
 plotcp(crs$rpart)
 
+# Prune tree to complexity parameter "CP" for the minimum cross-validation error "xerror". 
+# This point matches where the Complexity parameter pruned the tree automaticaly
 pruned_tree<- prune(crs$rpart,crs$rpart$cptable[which.min(crs$rpart$cptable[,"xerror"]),"CP"] )
 fancyRpartPlot(pruned_tree, uniform=TRUE)
 print(pruned_tree)
 
 cat("\n")
 
-# Time taken: 1.34 secs
-
 #=======================================================================
 
 # Plot the resulting Decision Tree. 
 
-# We use the rpart.plot package.
-
-fancyRpartPlot(crs$rpart, main="Decision Tree MI_accidents_for_severity_.csv $ Severity")
-
-
-#pdf("Decision Tree", height=11, width=17)
+library(rpart.plot)
+pdf("Decision Tree", height=11, width=17)
 par(mfrow=c(1,1), pty='m')  
-fancyRpartPlot(crs$rpart, main="Decision Tree: Accident Severity", sub="", cex.main=3, cex=1.5)
-#dev.off()
+fancyRpartPlot(crs$rpart, 
+               main="Decision Tree: Accident Severity", 
+               sub="", cex.main=3, cex=1.5, digits=5)
+dev.off()
 
 
 #=======================================================================
@@ -177,5 +176,6 @@ cat(100-sum(diag(per), na.rm=TRUE))
 # Calculate the averaged class error percentage.
 
 cat(mean(per[,"Error"], na.rm=TRUE))
+
 
 
