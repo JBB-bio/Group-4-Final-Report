@@ -1,8 +1,9 @@
 ---
-title: "US Accidents"
-author: "Jordan Burton"
-date: "February 17, 2020"
-output: html_document
+title: "Accident Locations"
+author: "Group 4"
+date: "April 23, 2020"
+output: 
+  github_document: default
 ---
 #What causes accidents in a specific location?
 
@@ -10,8 +11,8 @@ output: html_document
 
 For the setup we loaded text files related directly to Michigan Accidents as well as County data. Additionally, we loaded some of our base packages. As the project went on, we went back and added any additional packages that were needed to dig deeper into the data. 
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE) 
+```{r}
+knitr::opts_chunk$set(echo = FALSE) 
 ```
 
 ```{r}
@@ -466,5 +467,5 @@ GRFreq <- GRloc %>%
 
 view(GRFreq)
 ```
-Shoulld be up to date to here
+
 
