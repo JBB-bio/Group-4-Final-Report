@@ -8,4 +8,4 @@ This repository contains the R files submitted by Group 4 for the DSA 6000 Final
 [KNN](knn,decision-tree.R), [Ordinal Logistic Regression](Ordinal Logistic Regression.R), and [Decision Tree](MI_accidents_for_severity_script_decision-trees.R) Models are also contained in this repository.
 
 ## Final Report & Presentation
-Our [Final Report]() and [Presentation](), as well as our [Midterm Report]() and [Proposal]() are also contained in this repository.
+Our [Final Report](Final Report.pdf) and [Presentation](Final Presentation.pptx), as well as our [Midterm Report](Midterm Report.pdf) and [Proposal](Project Proposalpdf.pdf) are also contained in this repository.
