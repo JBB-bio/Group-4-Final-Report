@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1587677514815.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "FC36B183",
+    "lastKnownWriteTime" : 1587677609,
+    "last_content_update" : 1587677609063,
+    "path" : "~/Desktop/Group-4-Final-Report/MI_accidents_for_severity__script__decision-trees.R",
+    "project_path" : "MI_accidents_for_severity__script__decision-trees.R",
+    "properties" : {
+        "cursorPosition" : "178,0",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 4,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

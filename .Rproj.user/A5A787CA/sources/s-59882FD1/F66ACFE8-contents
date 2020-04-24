@@ -1,0 +1,831 @@
+---
+title: "Michigan Maps"
+author: "Group 4"
+date: "April 22, 2020"
+output: 
+  github_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE) # echo is set to FALSE to prevent the code from being output in the Knit document
+```
+
+```{r include=FALSE}
+# I like to load all my libraries in the first chunk so that it is easy to find them
+# use install.packages("dplyr") to install a package into your RStudio
+library(dplyr) # dplyr makes piping and data manipulation easier
+library(ggplot2) # ggplot2 provides functionality to create good plots using R
+library(tidyr) # tidyr is an extension of dplyr
+library(maps) # maps is what I have been using to create the county map plots
+library(mapproj) # mapproj should give a more accurate projection of longitudinal and latitudinal data
+library(tidyverse) # tidyverse is also part of dplyr
+#kableExtra requires the instal of the following package first:   install.packages("hms")
+library(kableExtra) # kableExtra allows the creation of formatable tables
+library(corrplot) # makes nice corrolation plot
+library(ggmap) # Incorporates google maps, openstreetmap, stamen maps, or cloudmade maps with the layered grammer of graphics implementation of ggplot2.
+library(lubridate) #datetime manipulation
+```
+
+```{r}
+register_google(key="AIzaSyCgwU7qSt5tpArZqWlaHOFJlklSUxa-ByU")
+```
+
+```{r, include=FALSE}
+# Dataframes created in this code block
+
+# MI_accidents:
+# "ID"                    "Source"                "TMC"                  
+# "Severity"              "Start_Time"            "End_Time"             
+# "Start_Lat"             "Start_Lng"             "End_Lat"              
+# "End_Lng"               "Distance.mi."          "Description"          
+# "Number"                "Street"                "Side"                 
+# "City"                  "County"                "State"                
+# "Zipcode"               "Country"               "Timezone"             
+# "Airport_Code"          "Weather_Timestamp"     "Temperature.F."       
+# "Wind_Chill.F."         "Humidity..."           "Pressure.in."         
+# "Visibility.mi."        "Wind_Direction"        "Wind_Speed.mph."      
+# "Precipitation.in."     "Weather_Condition"     "Amenity"              
+# "Bump"                  "Crossing"              "Give_Way"             
+# "Junction"              "No_Exit"               "Railway"              
+# "Roundabout"            "Station"               "Stop"                 
+# "Traffic_Calming"       "Traffic_Signal"        "Turning_Loop"         
+# "Sunrise_Sunset"        "Civil_Twilight"        "Nautical_Twilight"    
+# "Astronomical_Twilight"
+
+# Michigancensus:
+#"CountyId"         "State"            "County"           "TotalPop"        
+#"Men"              "Women"            "Hispanic"         "White"           
+#"Black"            "Native"           "Asian"            "Pacific"         
+#"VotingAgeCitizen" "Income"           "IncomeErr"        "IncomePerCap"    
+#"IncomePerCapErr"  "Poverty"          "ChildPoverty"     "Professional"    
+#"Service"          "Office"           "Construction"     "Production"      
+#"Drive"            "Carpool"          "Transit"          "Walk"            
+#"OtherTransp"      "WorkAtHome"       "MeanCommute"      "Employed"        
+#"PrivateWork"      "PublicWork"       "SelfEmployed"     "FamilyWork"      
+#"Unemployment" 
+
+# include = FALSE means that this chunk will not be included in the output document after running "Knit"
+#variables <- read.delim("accident_variables.txt")
+MI_accidents <- read.delim("Michigan_Accidents_Dec19.txt") # Importing the subsetted data for Michigan from the US Accidents dataset
+census <- read.csv("acs2017_county_data.csv", header = TRUE) # Import of the 2017 US census data
+census <- census %>% # "%>%" is called a pipe, it essentially allows subsequent manipulations on a dataset
+  mutate(County = as.character(census$County)) %>% # Turning the county column into a character
+  mutate(County = str_remove(census$County, " County")) # Removing the " County" from every county name to make it easier to integrate with the Michigan accident data
+Michigancensus <- census[census$State == "Michigan",] # Creating a dataset of only Michigan counties
+#change Michigancensus columns Employed,Men,Women,VotingAgeCitizen to proportion of TotalPop like the other variables in the Michigan census dataset
+
+#These should be desinated with PerCapita...
+Michigancensus$Employed <- Michigancensus$Employed/ Michigancensus$TotalPop
+Michigancensus$Men <- Michigancensus$Men/ Michigancensus$TotalPop
+Michigancensus$Women <- Michigancensus$Women/ Michigancensus$TotalPop
+Michigancensus$VotingAgeCitizen <- Michigancensus$VotingAgeCitizen
+```
+
+```{r, include=FALSE}
+# Dataframes updated in this code block
+# MI_accidents: columns added... Start_Time, Year
+
+head(MI_accidents) # Just looking at the data
+MI_accidents <- MI_accidents %>%
+  mutate(Start = as.character(Start_Time)) %>% # Creating a column that contains Start_Time as a character
+  mutate(Year = format(as.Date(Start, format = "%Y-%m-%d"), "%Y")) # formating Start as a date and pulling out the Year to create a year column. I will do this again later to pull the month into a column
+MI_accidents <- MI_accidents %>%
+  mutate(Hour = hour(Start_Time)) %>%
+  mutate(Hour = factor(as.character(Hour),
+                         levels = as.character(c(0:23))))
+
+
+#Hour_temp <-MI_accidents %>%
+    #select(Start_Time) %>%
+#    mutate(Hour_temp = hour(Start_Time)) %>%
+#    mutate(Hour_temp = factor(as.character(Hour_temp),
+ #                        levels = as.character(c(0:23)))) #MI_accidents$Military_Time <- Hour_temp
+#rm(Military_Time)
+
+##clean up county name duplicates
+MI_accidents$County[MI_accidents$County == "St. Joseph"] <- "Saint Joseph" #county name duplicates
+MI_accidents$County[MI_accidents$County == "St. Clair"] <- "Saint Clair" #county name duplicatesro
+
+```
+
+
+```{r}
+# Export subset of MI_accidents to CSV
+
+MI_accidents_for_severity <- MI_accidents %>%
+  dplyr::mutate(Month = format(as.Date(Start_Time, format = "%Y-%m-%d"), "%m")) %>%
+  #dplyr::select(Start_Time) %>%
+  dplyr::group_by(Severity,Start_Time,Start_Lat,Start_Lng,Street,Side,City,County,Zipcode,Timezone,Temperature.F.,Weather_Condition,Amenity,Bump,Crossing,Give_Way,Junction,No_Exit,Railway,Roundabout,Station,Stop,Traffic_Calming,Traffic_Signal,Sunrise_Sunset,Year,Month,Hour) %>%
+  dplyr::summarize(number=dplyr::n())
+
+names(MI_accidents_for_severity)[names(MI_accidents_for_severity) == "number"]<-"Accidents"
+
+
+MI_accidents_for_severity <- MI_accidents_for_severity[((
+  (MI_accidents_for_severity$Year == 2019)|(MI_accidents_for_severity$Year == 2018) |(MI_accidents_for_severity$Year == 2017))   ),]
+
+
+MI_accidents_for_severity$Severity <-as.factor(MI_accidents_for_severity$Severity)
+levels(MI_accidents_for_severity$Severity) <- c("less severe", "less severe", "more severe", "more severe")
+
+MI_accidents_for_severity <- na.omit(MI_accidents_for_severity) 
+
+#write.csv(MI_accidents_for_severity,"MI_accidents_for_severity_.csv", row.names = FALSE)
+
+MI_accidents_for_severity_Genesee <-MI_accidents_for_severity[(
+  (MI_accidents_for_severity$County =="Genesee")   ),]
+
+#write.csv(MI_accidents_for_severity_Genesee,"MI_accidents_for_severity_Genesee_.csv", row.names = FALSE)
+
+MI_accidents_for_severity_Kent <-MI_accidents_for_severity[(
+  (MI_accidents_for_severity$County =="Kent")   ),]
+
+#write.csv(MI_accidents_for_severity_Kent,"MI_accidents_for_severity_Kent_.csv", row.names = FALSE)
+
+MI_accidents_for_severity_Wayne <-MI_accidents_for_severity[(
+  (MI_accidents_for_severity$County =="Wayne")   ),]
+
+#write.csv(MI_accidents_for_severity_Wayne,"C:\\Users\\David\\OneDrive\\Desktop\\DSA6000\\DS6000\\MI_accidents_for_severity_Wayne_.csv", row.names = FALSE)
+
+
+
+```
+
+
+```{r, include=FALSE}
+# Dataframes created in this code block
+# MI_county_map_acc_by_year:(join maping)Year,subregion,Accidents,long,lat,group,order
+# TotalMIAcc: subregion, TotalPop, Accidents, AccidentsPerCapita
+# TotalMIAcc_v1: county level Accidents and AccidentsPerCapita allong side county level census data (removing categorical variables: "CountyId","State","County")
+
+MIyandc <- MI_accidents %>%
+  group_by(Year,County) %>% # This takes the MI_accidents data and groups it by year and county
+  dplyr::summarize(number=dplyr::n()) # Summarizes the data in terms of number of instances based on the groups I made in the line above, in this case each county will have a summary of the accidents that happened in a year
+str(MIyandc) # Checking to ensure that the data wrangling I just did worked
+county_map <- map_data("county") # map_data is from the maps package, I am pulling the county data from the package
+MI_county_map <- filter(county_map, region == "michigan") # subsetting the county map data to contain only MI counties
+names(MIyandc) <- c("Year", "subregion", "Accidents") # renaming the MI summary data to match that in the county map data
+MIyandc$subregion <- tolower(MIyandc$subregion) # matching the case of the MI accident county to that of the county map data
+MI_county_map_acc_by_year <- right_join( MIyandc, MI_county_map, by = "subregion") # This joins the data together using the subregion columns of both datasets without removing rows from the accident data
+
+MI_Sev_Co<- MI_accidents_for_severity %>%
+  group_by(Severity,County) %>%
+  dplyr::summarize(number=dplyr::n())
+names(MI_Sev_Co) <- c("Severity", "subregion", "Accidents")
+MI_Sev_Co$subregion <- tolower(MI_Sev_Co$subregion)
+MI_Sev_Co_Map <- right_join( MI_Sev_Co, MI_county_map, by = "subregion")
+MI_Sev_Co_Map <- na.omit(MI_Sev_Co_Map) 
+
+
+TotalMIAcc <- MI_accidents %>%
+  group_by(County) %>% # Grouping MI accidents data by county
+  dplyr::summarize(number=dplyr::n()) # This will give us the total number of accidents per county over the timeseries
+names(TotalMIAcc) <- c("County", "Accidents") # renaming the columns for further use
+
+TotalMIAcc <- full_join(Michigancensus, TotalMIAcc,  by = "County") # Joining the Michigan census datawith the total accident summary by matching County
+TotalMIAcc$AccidentsPerCapita <-TotalMIAcc$Accidents/TotalMIAcc$TotalPop
+TotalMIAcc<-TotalMIAcc %>% arrange(desc(TotalMIAcc$AccidentsPerCapita))
+head(TotalMIAcc)
+TotalMIAcc_v1 <- TotalMIAcc #copy kept with all values
+TotalMIAcc_v1 <- TotalMIAcc_v1[,-c(1:3)] #remove "CountyId","State","County" before running correlation matrix
+drops <- c("Pacific","IncomeErr","Poverty","ChildPoverty","Office","Construction","Production", "IncomePerCap", "Income", "IncomePerCapErr", "Native", "FamilyWork", "Unemployment")
+TotalMIAcc_v1 <- TotalMIAcc_v1[ , !(names(TotalMIAcc_v1) %in% drops)]
+
+
+
+TotalMIAcc <- TotalMIAcc[,c("County", "TotalPop", "Accidents", "AccidentsPerCapita")] # reducing the dataset to be more manageable
+
+
+
+
+TotalMISev <- MI_accidents %>% #creating a dataframe that breaks the Michigan accidents data into county and severity levels
+  group_by(County, Severity) %>%
+  dplyr::summarize(number=dplyr::n())
+names(TotalMISev) <- c("County", "Severity","Accidents")
+TotalMISev <- full_join(Michigancensus, TotalMISev,  by = "County") # Joining the Michigan census datawith the severity accident summary by matching County
+TotalMISev$AccidentsPerCapita <-TotalMISev$Accidents/TotalMISev$TotalPop
+TotalMISev$SeverityPerCapita <-TotalMISev$Severity/TotalMISev$TotalPop
+TotalMISev_v1 <- TotalMISev[,-c(1:3)]
+
+drops <- c("Pacific","IncomeErr","Poverty","ChildPoverty","Office","Construction","Production")
+TotalMISev_v1 <- TotalMISev_v1[ , !(names(TotalMISev_v1) %in% drops)]
+
+```
+
+
+
+```{r}
+# Dataframe used in this code block:
+# TotalMIAcc: subregion, TotalPop, Accidents
+# Note the lack of include = FALSE above, this chunk will create the plot below and the plot will be included into the document
+ggplot(TotalMIAcc, aes(x = County, y = Accidents, col = log2(TotalPop), fill = log2(TotalPop))) + # This line is used to determine what data will be used to fill the plots
+  geom_col() + # This makes a column chart
+  scale_y_log10() + # this scales the y-axis to log10, I did this to make it easier to visualize the differnces
+  theme(axis.text.x=element_blank())
+```
+
+***Figure*** Total accidents from 2016 to 2019 in each county in Michigan, higher populations typically result in more accidents.
+```{r, include=FALSE}
+# Dataframes created in this code block
+# MI_county_map_acc: subregion, TotalPop, Acciddents, AccidentsPerCapita, long, lat, group, order, region
+
+# Dataframes modified in this code block
+# TotalMIAcc subregion(county) names to lowercase to match map data
+
+# The text above will be included in the knit document, the three *** on either side of Figure will make it bold
+names(TotalMIAcc) <- c("subregion", "TotalPop", "Accidents", "AccidentsPerCapita") # Renaming the columns in the dataframe to match the county map data
+TotalMIAcc$subregion <- tolower(as.character(TotalMIAcc$subregion)) # making the county name in the the subregion column match the case of that in the map data, at the time I found that it was easier to make everything lowercase versus the first letter, but this could probably be better if we could make the first letter of each county column upper case and all the rest lowercase
+MI_county_map_acc <- right_join( TotalMIAcc, MI_county_map, by = "subregion") # I did all of the above in this chunk for this join, I will use this data to create the plot below
+```
+
+```{r}
+# Dataframe used in this code block
+# MI_county_map_acc: subregion, TotalPop, Acciddents, AccidentsPerCapita long, lat, group, order, region
+
+ggplot(MI_county_map_acc, aes(long, lat, group=group)) + # group = group is required to keep all of the county longitudes and latitudes together per county
+  geom_polygon(aes(fill = log2(Accidents)), color = "white") +#geom_polygon allows the map representation to be placed onto the graph
+
+theme_classic() + labs(title = "Total Accidents per County (2016-2019)", x= "Longitude", y = "Latitude") + theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+***Figure*** Total accidents (2016 - 2019) in each county of Michigan
+```{r}
+# Dataframe used in this code block
+# MI_county_map_acc: subregion, TotalPop, Acciddents, AccidentsPerCapita long, lat, group, order, region
+
+#This creates the same plot as above, but the fill was changed from accidents to TotalPop
+ggplot(MI_county_map_acc, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill = log2(TotalPop)), color = "white") +
+  theme_classic() +
+  labs(title = "2017 Population Estimate per County", x= "Longitude", y = "Latitude") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+***Figure*** Total population of each county of Michigan (2017 Estimate)
+
+```{r}
+# Dataframes used in this code block
+# MI_county_map_acc_by_year:(join maping)Year,subregion,Accidents,long,lat,group,order
+
+ggplot(MI_county_map_acc_by_year, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill=log2(Accidents)), color = "white") + 
+  facet_wrap(~Year) + # This created the multiple plots we see below by year
+  theme_classic() +
+  labs(title = "Yearly Accidents per County", x= "Longitude", y = "Latitude") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+***Figure*** Yearly accidents in each Michigan County from 2016 - 2020. 2016 and 2020 are misssing data.
+
+```{r}
+
+ggplot(MI_Sev_Co_Map, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill=log2(Accidents)), color = "white") + #, color = "white"
+  facet_wrap(~Severity) + # This created the multiple plots we see below by year
+  
+  geom_hline(aes(yintercept = 42.78239),size=1, color = "red") + #2) & #3) latitude
+  
+  geom_hline(aes(yintercept = 43.24714),size=1, color = "red") + #4) & #5) latitude
+
+#approximate southern boarder of the East Side of MI: lat: 41.736413
+#30) & 31) longitude: -83.2029
+  geom_segment(aes( x = -83.20295,y = 42.78239, xend = -83.20295, yend = 41.736413),size=1, color = "red") + # ", data = df" don't think this arg needs the data frame
+
+#approximate southern boarder of the East Side of MI: lat: 41.736413
+#60) & #61) longitude: -83.22021
+  geom_segment(aes(x = -83.22021,y = 42.78239, xend = -83.22021,yend = 41.736413),size=1, color = "red") + # ", data = df" don't think this arg needs the data frame
+
+  theme_classic() +
+  labs(title = "Accident Severity", x= "Longitude", y = "Latitude") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+
+#1) root 50153 21104 less severe (0.5792076 0.4207924)   
+   #2) Start_Lat>=42.78239 24131  5062 less severe (0.7902283 0.2097717)   
+     #4) Start_Lat< 43.24714 23080  4330 less severe (0.8123917 0.1876083) * 
+     #5) Start_Lat>=43.24714 1051   319 more severe (0.3035205 0.6964795) * 
+   #3) Start_Lat< 42.78239 26022  9980 more severe (0.3835216 0.6164784)   
+     #6) Traffic_Signal=True 1959   677 less severe (0.6544155 0.3455845) * 
+     #7) Traffic_Signal=False 24063  8698 more severe (0.3614678 0.6385322)   
+      #14) Junction=True 3651  1763 less severe (0.5171186 0.4828814) * 
+      #15) Junction=False 20412  6810 more severe (0.3336273 0.6663727)   
+        #30) Start_Lng< -83.20295 10519  4012 more severe (0.3814051 0.6185949)   
+          #60) Start_Lng>=-83.22021 1148   314 less severe (0.7264808 0.2735192) * 
+          #61) Start_Lng< -83.22021 9371  3178 more severe (0.3391314 0.6608686) * 
+        #31) Start_Lng>=-83.20295 9893  2798 more severe (0.2828262 0.7171738) * 
+```
+
+***Figure*** Decision tree splitting of Longitude and Latitude are shown as red lines on the map. 
+
+
+
+```{r}
+# Dataframe used in this code block
+# MI_county_map_acc: subregion, TotalPop, Acciddents, AccidentsPerCapita long, lat, group, order, region
+
+#This creates the same plots as above, but the fill was changed to AccidentsPerCapita
+ggplot(MI_county_map_acc, aes(long, lat, group=group)) +
+  geom_polygon(aes(fill = log2(AccidentsPerCapita)), color = "white") +
+  theme_classic() +
+  labs(title = "Accidents per Capita in Michigan Counties", x= "Longitude", y = "Latitude") +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+***Figure*** Plot of Accidents per Capita in Michigan counties.
+
+```{r}
+#pdf("Severity Map with Decision Tree Partitions", height=17, width=11)
+#par(mfrow=c(1,1), pty='m')  
+#Map of MI accidents by street
+#qmap("Michigan",zoom = 1) +  
+#  geom_point(aes(Start_Lng, Start_Lat, fill = Street, col = Severity), data = #MI_accidents_for_severity) +
+#  geom_hline(aes(yintercept = 42.78239),size=1.5) + #2) & #3) latitude
+  
+#  geom_hline(aes(yintercept = 43.24714),size=1.5) + #4) & #5) latitude
+
+#approximate southern boarder of the East Side of MI: lat: 41.736413
+#30) & 31) longitude: -83.2029
+#  geom_segment(aes( x = -83.20295,y = 42.78239, xend = -83.20295, yend = 41.736413),size=1.5) + # ", data = df" don't think this arg needs the data frame
+
+#approximate southern boarder of the East Side of MI: lat: 41.736413
+#60) & #61) longitude: -83.22021
+#  geom_segment(aes(x = -83.22021,y = 42.78239, xend = -83.22021,yend = 41.736413),size=1.5) + # ", data = df" don't think this arg needs the data frame
+
+#  theme(legend.position = "top")
+#dev.off()
+
+#1) root 50153 21104 less severe (0.5792076 0.4207924)   
+   #2) Start_Lat>=42.78239 24131  5062 less severe (0.7902283 0.2097717)   
+     #4) Start_Lat< 43.24714 23080  4330 less severe (0.8123917 0.1876083) * 
+     #5) Start_Lat>=43.24714 1051   319 more severe (0.3035205 0.6964795) * 
+   #3) Start_Lat< 42.78239 26022  9980 more severe (0.3835216 0.6164784)   
+     #6) Traffic_Signal=True 1959   677 less severe (0.6544155 0.3455845) * 
+     #7) Traffic_Signal=False 24063  8698 more severe (0.3614678 0.6385322)   
+      #14) Junction=True 3651  1763 less severe (0.5171186 0.4828814) * 
+      #15) Junction=False 20412  6810 more severe (0.3336273 0.6663727)   
+        #30) Start_Lng< -83.20295 10519  4012 more severe (0.3814051 0.6185949)   
+          #60) Start_Lng>=-83.22021 1148   314 less severe (0.7264808 0.2735192) * 
+          #61) Start_Lng< -83.22021 9371  3178 more severe (0.3391314 0.6608686) * 
+        #31) Start_Lng>=-83.20295 9893  2798 more severe (0.2828262 0.7171738) * 
+
+```
+
+
+```{r}
+#Map of MI accidents by street
+#qmap("Michigan", zoom = 6) +
+#  geom_point(aes(Start_Lng, Start_Lat, fill = Street, col = County), data = MI_accidents) +
+#  theme(legend.position = "none")
+```
+
+
+
+```{r}
+# Dataframe created in this code block
+# temperature: Temp, Accidents
+
+# See above for data wrangling comments
+temperature <- MI_accidents %>%
+group_by(Temperature.F.) %>%
+  dplyr::summarize(number=dplyr::n())
+names(temperature) <- c("Temp", "Accidents")
+ggplot(temperature, aes(Temp)) + 
+  geom_histogram(bins = 120)
+```
+
+***Figure*** Effect of temperature on accidents in Michigan
+
+```{r}
+# Dataframe created in this code block
+# DayorNight: Condition (Day/Night), Accidents
+
+# See above for data wrangling comments
+DayorNight <- MI_accidents %>%
+group_by(Sunrise_Sunset) %>%
+  dplyr::summarize(number=dplyr::n())
+names(DayorNight) <- c("Condition", "Accidents")
+DayorNight <- DayorNight[-1,]
+ggplot(DayorNight, aes(Condition, Accidents)) + 
+  geom_bar(stat="Identity")
+```
+
+***Figure*** More accidents occur during the day.
+
+
+```{r}
+sorted_co<- MI_accidents %>%
+  group_by(County) %>% 
+  dplyr::summarize(number=dplyr::n())
+names(sorted_co)<- c("County", "Accidents")
+sorted_co
+sorted_co<-sorted_co %>% arrange(desc(sorted_co$Accidents))
+sorted_co
+```
+***Table*** Total Accidents from 2016 - 2020 in each county.
+
+```{r}
+#set up for
+# “For the counties with the most accidents, is it possible to predict the #monthly volume of accidents by day/night?”
+
+# Dataframe created in this code block
+# MI_acc_time_county: Sunrise_Sunset, County, Year, Month, Accidents
+# Top_counties: List of counties with more than 1,000 accidents
+# MI_acc_time_county_top: Sunrise_Sunset, County,Year, Month, Accidents
+MI_acc_time_county <- MI_accidents %>%
+  mutate(Year = format(as.Date(Start_Time, format = "%Y-%m-%d"), "%Y")) %>%
+  mutate(Month = format(as.Date(Start_Time, format = "%Y-%m-%d"), "%m")) %>%
+  group_by(Sunrise_Sunset,County,Year,Month) %>% 
+  dplyr::summarize(number=dplyr::n())
+names(MI_acc_time_county)<- c("Sunrise_Sunset", "County","Year","Month", "Accidents") 
+MI_acc_time_county<-as.data.frame(MI_acc_time_county) #change from grouped data frame to data frame
+#check coding of factors str(MI_acc_time_county) 3rd level of ""/"Day"/"Night"
+
+#remove NA values
+MI_acc_time_county$Sunrise_Sunset[MI_acc_time_county$Sunrise_Sunset == ""] <- NA #"" fill in with R's NA designation
+MI_acc_time_county <-na.omit(MI_acc_time_county)
+
+#fix the factor variable levels for "Sunrise_Sunset"
+MI_acc_time_county[, "Sunrise_Sunset"]   <- factor(
+  MI_acc_time_county[, "Sunrise_Sunset"],
+  labels = c("Day", "Night"),
+  exclude = NA) 
+
+#clean up county name duplicates
+MI_acc_time_county$County[MI_acc_time_county$County == "St. Joseph"] <- "Saint Joseph" #county name duplicates
+MI_acc_time_county$County[MI_acc_time_county$County == "St. Clair"] <- "Saint Clair" #county name duplicates
+
+# get to list of top counties w/1,000+ Accidents
+Top_counties <- MI_accidents %>%
+  group_by(County) %>% 
+  dplyr::summarize(number=dplyr::n())
+names(Top_counties)<- c("County", "Accidents") 
+Top_counties<- as.data.frame(Top_counties)
+Top_counties <- Top_counties[Top_counties$Accidents>=1000,] 
+County <- c("County")
+Top_counties <- Top_counties[County]
+
+#filter to top counties 
+MI_acc_time_county_top <- merge(MI_acc_time_county,Top_counties,by = "County", all.y=TRUE )
+
+#Test dataset 2017 and 2018; train 2019
+test_matct_index<-(MI_acc_time_county_top$Year == 2019 )
+train_matct<- MI_acc_time_county_top[(((MI_acc_time_county_top$Year == 2018) |(MI_acc_time_county_top$Year == 2017))   ),]
+test_matct<- MI_acc_time_county_top[test_matct_index ,]
+
+```
+
+
+
+```{r}
+#linear regression for
+# “For the counties with the most accidents, is it possible to predict the #monthly volume of accidents by day/night?”
+
+# First linear regression model with predicting accident volume by county and day vs night, Test MSE is lower than second model below
+# Model p-values less tha .10 for 5 of 6 counties with the most accidents
+lm01_time_county <-with(train_matct,lm(Accidents~ Sunrise_Sunset +County, data=train_matct))
+summary(lm01_time_county)
+
+pred01_time_county <- predict(lm01_time_county,
+                    newdata=data.frame(test_matct))
+lm01_test_mse <- mean((test_matct$Accidents - pred01_time_county)^2)
+
+# Second model with addition of month of year as predictor, Test MSE is higher
+lm02_time_county <-with(train_matct,lm(Accidents~ Sunrise_Sunset +County +Month, data=train_matct))
+summary(lm02_time_county)
+pred02_time_county <- predict(lm02_time_county,
+                    newdata=data.frame(test_matct))
+lm02_test_mse <- mean((test_matct$Accidents - pred02_time_county)^2)
+summary(lm02_time_county)
+```
+
+***Figure*** Summary of linear regression models. The first linear regression model with predicting accident volume by county and day vs night, Test MSE is lower than second model and is used to generate the figures below.
+
+```{r}
+# Graph an example using the first model: Wayne County durrung the Day
+wayne_day_test_matct <- test_matct %>% 
+  filter(County == "Wayne", Sunrise_Sunset =="Day")
+
+wayne_day_night_lm_pred <- predict(lm01_time_county,
+                    newdata=data.frame(Sunrise_Sunset=c("Day"),
+                                       County=c("Wayne") ),
+                    interval="prediction")
+
+plot(wayne_day_test_matct$Month,wayne_day_test_matct$Accidents, ylim=c(0,700), xlab="Months", ylab="Wayne County Daytime Accidents")
+polygon(x=c(rev(seq(1,12,1)),seq(1,12,1) ), y=c(rep(wayne_day_night_lm_pred[,"lwr"],12),rep(wayne_day_night_lm_pred[,"upr"],12)), col='grey80', border=NA)
+points(wayne_day_test_matct$Month,wayne_day_test_matct$Accidents)
+abline(h=497.2259, col="black", lty=2)
+abline(h=335.0073, col="black", lty=3)
+abline(h=172.7888, col="black", lty=2)
+legend('topleft', legend=c('Test Data',NA,'Upper Prediction Interval','Wayne Daytime Predicton','Lower Prediction Interval'), pch=c(1, rep(NA,4)), lwd=c(NA,NA,2,2,2),lty=c(NA,NA,2,3,2), cex=.6)
+```
+
+***Figure*** Using linear regression to predict the number of daytime accidents in each month of the year in Wayne County.
+
+```{r}
+# Graph an example using the first model: Wayne County durrung the Day
+wayne_night_test_matct <- test_matct %>% 
+  filter(County == "Wayne", Sunrise_Sunset =="Night")
+
+wayne_day_night_lm_pred2 <- predict(lm01_time_county,
+                    newdata=data.frame(Sunrise_Sunset=c("Night"),
+                                       County=c("Wayne") ),
+                    interval="prediction")
+
+plot(wayne_night_test_matct$Month,wayne_night_test_matct$Accidents, ylim=c(0,700), xlab="Months", ylab="Wayne County Night-Time Accidents")
+polygon(x=c(rev(seq(1,12,1)),seq(1,12,1) ), y=c(rep(wayne_day_night_lm_pred2[,"lwr"],12),rep(wayne_day_night_lm_pred2[,"upr"],12)), col='grey80', border=NA)
+points(wayne_night_test_matct$Month,wayne_night_test_matct$Accidents)
+abline(h=wayne_day_night_lm_pred2[,"upr"], col="black", lty=2)
+abline(h=wayne_day_night_lm_pred2[,"fit"], col="black", lty=3)
+abline(h=wayne_day_night_lm_pred2[,"lwr"], col="black", lty=2)
+legend('topleft', legend=c('Test Data',NA,'Upper Prediction Interval','Wayne Night-Time Predicton','Lower Prediction Interval'), pch=c(1, rep(NA,4)), lwd=c(NA,NA,2,2,2),lty=c(NA,NA,2,3,2), cex=.6)
+```
+
+***Figure*** Using linear regression to predict the number of nighttime accidents in each month of the year in Wayne County.
+
+```{r}
+# Graph an example using the first model: Genesee County durring the night
+genesee_day_test_matct <- test_matct %>% 
+  filter(County == "Genesee", Sunrise_Sunset =="Day")
+
+genesee_day_night_lm_pred <- predict(lm01_time_county,
+                    newdata=data.frame(Sunrise_Sunset=c("Day"),
+                                       County=c("Genesee") ),
+                    interval="prediction")
+
+plot(genesee_day_test_matct$Month,genesee_day_test_matct$Accidents, ylim=c(0,700), xlab="Months", ylab="Genesee County Daytime Accidents")
+polygon(x=c(rev(seq(1,12,1)),seq(1,12,1) ), y=c(rep(genesee_day_night_lm_pred[,"lwr"],12),rep(genesee_day_night_lm_pred[,"upr"],12)), col='grey80', border=NA)
+points(genesee_day_test_matct$Month,genesee_day_test_matct$Accidents)
+abline(h=genesee_day_night_lm_pred[,"upr"], col="black", lty=2)
+abline(h=genesee_day_night_lm_pred[,"fit"], col="black", lty=3)
+abline(h=genesee_day_night_lm_pred[,"lwr"], col="black", lty=2)
+legend('topleft', legend=c('Test Data',NA,'Upper Prediction Interval','Genesee Daytime Predicton','Lower Prediction Interval'), pch=c(1, rep(NA,4)), lwd=c(NA,NA,2,2,2),lty=c(NA,NA,2,3,2), cex=.6)
+```
+
+
+***Figure*** Using linear regression to predict the number of daytime accidents in each month of the year in Genesee County.
+
+```{r}
+# Graph an example using the first model: Genesee County durring the night
+genesee_night_test_matct <- test_matct %>% 
+  filter(County == "Genesee", Sunrise_Sunset =="Night")
+
+genesee_day_night_lm_pred2 <- predict(lm01_time_county,
+                    newdata=data.frame(Sunrise_Sunset=c("Night"),
+                                       County=c("Genesee") ),
+                    interval="prediction")
+
+plot(genesee_night_test_matct$Month,genesee_night_test_matct$Accidents, ylim=c(0,700), xlab="Months", ylab="Genesee County Night-Time Accidents")
+polygon(x=c(rev(seq(1,12,1)),seq(1,12,1) ), y=c(rep(genesee_day_night_lm_pred2[,"lwr"],12),rep(genesee_day_night_lm_pred2[,"upr"],12)), col='grey80', border=NA)
+points(genesee_night_test_matct$Month,genesee_night_test_matct$Accidents)
+abline(h=genesee_day_night_lm_pred2[,"upr"], col="black", lty=2)
+abline(h=genesee_day_night_lm_pred2[,"fit"], col="black", lty=3)
+abline(h=genesee_day_night_lm_pred2[,"lwr"], col="black", lty=2)
+legend('topleft', legend=c('Test Data',NA,'Upper Prediction Interval','Genesee Night-Time Predicton','Lower Prediction Interval'), pch=c(1, rep(NA,4)), lwd=c(NA,NA,2,2,2),lty=c(NA,NA,2,3,2), cex=.6)
+```
+
+***Figure*** Using linear regression to predict the number of nighttime accidents in each month of the year in Genesee County.
+
+```{r}
+# Graph an example using the first model: Kent County durring the daytime
+kent_day_test_matct <- test_matct %>% 
+  filter(County == "Kent", Sunrise_Sunset =="Day")
+
+kent_day_night_lm_pred <- predict(lm01_time_county,
+                    newdata=data.frame(Sunrise_Sunset=c("Day"),
+                                       County=c("Kent") ),
+                    interval="prediction")
+
+plot(kent_day_test_matct$Month,kent_day_test_matct$Accidents, ylim=c(0,700), xlab="Months", ylab="Kent County Daytime Accidents")
+polygon(x=c(rev(seq(1,12,1)),seq(1,12,1) ), y=c(rep(kent_day_night_lm_pred[,"lwr"],12),rep(kent_day_night_lm_pred[,"upr"],12)), col='grey80', border=NA)
+points(kent_day_test_matct$Month,kent_day_test_matct$Accidents)
+abline(h=kent_day_night_lm_pred[,"upr"], col="black", lty=2)
+abline(h=kent_day_night_lm_pred[,"fit"], col="black", lty=3)
+abline(h=kent_day_night_lm_pred[,"lwr"], col="black", lty=2)
+legend('topleft', legend=c('Test Data',NA,'Upper Prediction Interval','Kent Daytime Predicton','Lower Prediction Interval'), pch=c(1, rep(NA,4)), lwd=c(NA,NA,2,2,2),lty=c(NA,NA,2,3,2), cex=.6)
+```
+
+***Figure*** Using linear regression to predict the number of daytime accidents in each month of the year in Kent County.
+
+```{r}
+# Graph an example using the first model: Kent County durring the night
+kent_night_test_matct <- test_matct %>% 
+  filter(County == "Kent", Sunrise_Sunset =="Night")
+
+kent_day_night_lm_pred2_ci <- predict(lm01_time_county,
+                    newdata=data.frame(Sunrise_Sunset=c("Night"),
+                                       County=c("Kent") ),
+                    interval="confidence")
+kent_day_night_lm_pred2_ci # meean response for monthly accidents ci doesn't cross zero
+
+kent_day_night_lm_pred2 <- predict(lm01_time_county,
+                    newdata=data.frame(Sunrise_Sunset=c("Night"),
+                                       County=c("Kent") ),
+                    interval="prediction")
+
+plot(kent_night_test_matct$Month,kent_night_test_matct$Accidents, ylim=c(0,700), xlab="Months", ylab="Kent County Night-Time Accidents")
+polygon(x=c(rev(seq(1,12,1)),seq(1,12,1) ), y=c(rep(kent_day_night_lm_pred2[,"lwr"],12),rep(kent_day_night_lm_pred2[,"upr"],12)), col='grey80', border=NA)
+points(kent_night_test_matct$Month,kent_night_test_matct$Accidents)
+abline(h=kent_day_night_lm_pred2[,"upr"], col="black", lty=2)
+abline(h=kent_day_night_lm_pred2[,"fit"], col="black", lty=3)
+abline(h=kent_day_night_lm_pred2[,"lwr"], col="black", lty=2)
+legend('topleft', legend=c('Test Data',NA,'Upper Prediction Interval','Kent Night-Time Predicton','Lower Prediction Interval'), pch=c(1, rep(NA,4)), lwd=c(NA,NA,2,2,2),lty=c(NA,NA,2,3,2), cex=.6)
+```
+
+***Figure*** Using linear regression to predict the number of nighttime accidents in each month of the year in Kent County.
+
+```{r}
+# For the largest counties there might be an interaction effect, however lines do not cross. Given data structure it is not possible to run an analysis of variance with an interaction term
+with(train_matct, interaction.plot(x.factor = Sunrise_Sunset, trace.factor = County, response = Accidents)) 
+
+library(car)
+options(contrasts = c("contr.sum", "contr.poly")) # We use contr.sum, otherwise type III sum of squares will be wrong (technical issue)
+aov_time_county <- with(train_matct,aov(Accidents~ Sunrise_Sunset +County, data=train_matct))
+Anova_type3 <- Anova(aov_time_county,
+        type = "III", 
+        data = train_matct)
+
+# our data is unbalanced per grouping, need to take this into account when selecting the anova model. Type 3 selected (controls for all other terms)
+#https://stat.ethz.ch/~meier/teaching/anova/factorial-treatment-structure.html#unbalanced-data
+
+#wayne_day_night_aov_pred <- predict(aov_time_county, 
+#                                newdata=data.frame(Sunrise_Sunset= #c("Day","Night"),
+#                                                   County=c("Wayne", "Wayne") #))
+#wayne_day_night_aov_pred
+
+#dummy.coef(aov_time_county)
+#summary(aov_time_county) #anova summary
+#summary.lm(aov_time_county) # look at individual alpha factors
+Anova_type3 
+```
+
+***Figure*** Anova analysis shows that more accidents occur during the day.
+
+```{r}
+# Dataframe created in this code block
+# city: City, Accidents
+
+# See above for data wrangling comments
+city <- MI_accidents %>%
+group_by(City) %>%
+  dplyr::summarize(number=dplyr::n())
+names(city) <- c("City", "Accidents")
+city$City <- as.character(city$City)
+#ggplot(city, aes(City, Accidents)) + 
+  #geom_col()
+city <- city %>%
+  arrange(desc(Accidents))
+#head(city)
+kable(city[1:3,]) # Create a table with the top 3 accident prone cities 
+```
+
+***Table*** Three cities (Flint, Detroit, and Grand Rapids) in Michigan account for the majority of the accidents reported in the state from 2016-2019.
+
+```{r}
+# Dataframe created in this code block
+# Wayne_county_map: long,lat,group,order,region,subregion
+# Wayne_accidents: full MI_accidents filtered to Wayne County
+
+# See above for data wrangling comments
+Wayne_county_map <- MI_county_map %>%
+  filter(subregion == "wayne")
+Wayne_accidents <- MI_accidents %>%
+  filter(County == "Wayne")
+
+#ggplot(Wayne_accidents, aes(Start_Lng, Start_Lat, fill = Severity, col = Severity)) +
+ # geom_point() +
+  #theme(legend.position = "right")
+
+qmap("wayne county", zoom = 10) +
+  geom_point(aes(Start_Lng, Start_Lat, fill = Severity, col = Severity), data = Wayne_accidents) +
+  theme(legend.position = "right")
+```
+
+***Figure*** Accidents in Wayne County from 2016 - 2019.
+
+```{r}
+# Dataframe created in this code block
+# Genesee_accidents: full MI_accidents filtered to Genesee County
+
+Genesee_accidents <- MI_accidents %>%
+  filter(County == "Genesee")
+ 
+#ggplot(Genesee_accidents, aes(Start_Lng, Start_Lat, fill = Street, col = Street)) +
+ # geom_point() +
+#  theme(legend.position = "none")
+qmap("flint", zoom = 12) +
+  geom_point(aes(Start_Lng, Start_Lat, fill = Severity, col = Severity), data = Genesee_accidents) +
+  theme(legend.position = "right")
+```
+
+***Figure*** Accidents near Flint.
+
+```{r}
+exit <- "I-75, M118, Flint"
+qmap(exit, zoom = 14) +
+    geom_point(aes(Start_Lng, Start_Lat, fill = Severity, col = Severity), data = Genesee_accidents) +
+  theme(legend.position = "right")
+```
+
+***Figure*** Accidents near I-75 Exit 118.
+
+```{r}
+# Dataframe created in this code block
+# Kent_accidents: full MI_accidents filtered to Kent County
+
+Kent_accidents <- MI_accidents %>%
+  filter(County == "Kent")
+ 
+#ggplot(Kent_accidents, aes(Start_Lng, Start_Lat, col = Severity, fill = Severity)) +
+ # geom_point() + 
+  #theme(legend.position =  "none")
+
+qmap("grand rapids", zoom = 12) +
+  geom_point(aes(Start_Lng, Start_Lat, fill = Severity, col = Severity), data = Kent_accidents) +
+  theme(legend.position = "none")
+```
+
+***Figure*** Accidents near Grand Rapids.
+
+```{r}
+# Dataframe created in this code block
+# Seasons: Season, Accidents
+# Dataframe updated in this code block
+# Seasons: Month, Severity, Accidents
+
+Seasons <- MI_accidents %>%
+  mutate(Month = format(as.Date(Start_Time, format = "%Y-%m-%d"), "%m")) %>%
+  group_by(Month) %>%
+  summarise(n())
+names(Seasons) <- c("Month", "Accidents")
+#Manually added up each Month's total to get seasons in place of months, not sure if this is a good way to look at the data, but it does make it simpler to interpret
+Winter <- 7969+6312+9214
+Spring <- 6348+5633+6056 
+Summer <- 6572+7257+8218
+Fall <- 8304+8935+7876
+Seasons <- data.frame(Season = c("Winter", "Spring", "Summer", "Fall"), Accidents =c(23495,18037, 22047, 25115))
+names(Seasons) <- c("Season", "Accidents")
+
+ggplot(Seasons, aes(x=Season, y=Accidents)) + 
+  geom_col()
+```
+
+***Figure*** Total number of accidents in the dataset for each season.
+
+```{r}
+# Severity might be a better response term than accidents so here I am grouping by month and severity
+Seasons <- MI_accidents %>%
+  mutate(Month = format(as.Date(Start_Time, format = "%Y-%m-%d"), "%m")) %>%
+  group_by(Month, Severity) %>%
+  summarise(n())
+names(Seasons) <- c("Month", "Severity", "Accidents")
+ggplot(Seasons, aes(x=Severity, y = log2(Accidents), fill = Month)) +
+  geom_col(position = "dodge") +
+  theme_classic() +
+  labs(title = "Severity of Accidents per Month", x= "Accident Severity", y = "log(Accidents)") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+***Figure*** Count of severity at each level (1-4) for each month. Severity does not differ significantly month to month.
+
+```{r}
+# Data frames used
+# TotalMIAcc_v1_cor: Accidents (Per county total and PerCapita) correlated against county level demographics from the census
+
+#Correlations follow county population density 
+TotalMIAcc_v1_cor<-cor(TotalMIAcc_v1, use = "complete.obs") 
+# build correlation matrix dataframe
+# to handle NA values: use = "complete.obs"
+#png("corrplot.png", width = 480,height = 600)
+corrplot(TotalMIAcc_v1_cor,type="lower",tl.cex=.6 , number.cex=.5, mar = c(1, 1, 1, 1))
+#dev.off()
+# build lower half of correlation matrix, visualize using text at .5 size
+```
+
+***Figure*** Correlation Plot of Accidents and Accident per capita vs. all other census variables.
+
+```{r}
+# Data frames used
+# TotalMISev_v1_cor: Accidents & Severity (Per county total and PerCapita) correlated against county level demographics from the census
+
+#Correlations follow county population density 
+TotalMISev_v1_cor<-cor(TotalMISev_v1, use = "complete.obs") 
+# build correlation matrix dataframe
+# to handle NA values: use = "complete.obs"
+corrplot(TotalMISev_v1_cor,type="lower",tl.cex=.5 , number.cex=.5)
+# build lower half of correlation matrix, visualize using text at .5 size
+
+#severity per capita seems to have a higher correlation with predictors than accidents per capita
+```
+
+***Figure*** Included Severity Per Captita which positively correlates to the Income Per Capita census variable.
+
+```{r}
+# need to add a google api key to use google maps, use ?register_google() to read details on this
+qmap("michigan", zoom = 6) + 
+  stat_density2d(aes(Start_Lng, Start_Lat), data = MI_accidents, bins = 1000)
+```
+
+***Figure*** Density plot of accidents in Michigan.

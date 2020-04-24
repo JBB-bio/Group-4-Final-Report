@@ -1,0 +1,25 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1587677263265.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "",
+    "hash" : "0",
+    "id" : "8396E814",
+    "lastKnownWriteTime" : 1587677430,
+    "last_content_update" : 1587677430692,
+    "path" : "~/Desktop/Group-4-Final-Report/Ordinal Logistic Regression.R",
+    "project_path" : "Ordinal Logistic Regression.R",
+    "properties" : {
+        "cursorPosition" : "4,58",
+        "scrollLine" : "0"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 3,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_source"
+}

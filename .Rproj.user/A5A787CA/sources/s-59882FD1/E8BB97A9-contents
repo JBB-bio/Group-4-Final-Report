@@ -1,0 +1,471 @@
+---
+title: "Accident Locations"
+author: "Group 4"
+date: "April 23, 2020"
+output: 
+  github_document: default
+---
+#What causes accidents in a specific location?
+
+##Setup
+
+For the setup we loaded text files related directly to Michigan Accidents as well as County data. Additionally, we loaded some of our base packages. As the project went on, we went back and added any additional packages that were needed to dig deeper into the data. 
+
+```{r}
+knitr::opts_chunk$set(echo = FALSE) 
+```
+
+```{r}
+
+MI_accidents <- read.delim("Michigan_Accidents_Dec19.txt")
+census <- read.csv("acs2017_county_data.csv", header = TRUE)
+
+```
+
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(maps)
+library(mapproj)
+library(tidyverse)
+library(lubridate)
+library(SnowballC)
+library(wordcloud)
+library(RColorBrewer)
+library(wordcloud2)
+
+```
+
+
+#Part 1 - Variables 
+
+For the first phase in looking at specific locations and causes, we took a deep dive at some of our variables. As you can see below we took a summary of all whether characteristics on as a whole (state of Michigan.) By doing this we think we were able to see that although we see extremes in whether, nothing specifically jumps out as happening out of the ordinary during accidents. With this we were also able to note, although a majority of accidents aren't happening under specific conditions, possibly the severity could be changed by this. 
+
+```{r}
+
+MI_accidents %>%
+  select(Severity,Distance.mi.,Temperature.F.,Wind_Chill.F.,Humidity...,Pressure.in.,Visibility.mi.,Wind_Speed.mph.,Precipitation.in.) %>%
+  summary()
+
+```
+
+In Congruence with the in-depth look at the weather, we decided to take a look at the street indicators as variables. By doing this we were able to provide a graph that jumped out to us. Traffic signals, Junctions and Crossings have a significant amount of crashes compared to other traffic indicators. This is helpful to keep in mind during our work. 
+
+
+```{r}
+
+crash <- c("Amenity", "Bump", "Crossing", "Give_Way", "Junction", "No_Exit", "Railway", "Roundabout" , "Station" , "Stop", "Traffic_Calming", "Traffic_Signal" , "Turning_Loop")
+
+crash <- subset(MI_accidents, select = crash)
+
+crash %>%
+  group_by(Amenity, Bump, Crossing, Give_Way, Junction, No_Exit, Railway, Roundabout, Station, Stop, Traffic_Calming, Traffic_Signal, Turning_Loop) %>%
+  count()
+
+summary(crash)
+
+crashes <- data.frame(name=c("Amenity", "Bump", "Crossing", "Give_Way", "Junction", "No_Exit", "Railway", "Roundabout" , "Station" , "Stop", "Traffic_Calming", "Traffic_Signal" , "Turning_Loop"), value=c(766,1,3877,4,7627,100,258,1,399,175,4,9978,0))
+
+ggplot(crashes, aes(fill=name, x=name,y=value)) + geom_bar(stat = "identity") + coord_flip()
+
+```
+
+
+```{r}
+
+MI_accidents %>%
+  ggplot() + geom_histogram(aes(x = Temperature.F.), binwidth = 2)
+
+MI_accidents %>%
+  ggplot() + geom_histogram(aes(x = Wind_Chill.F.))
+
+MI_accidents %>%
+  ggplot() + geom_histogram(aes(x= Wind_Speed.mph.))
+
+MI_accidents %>%
+  ggplot() + geom_histogram(aes(x= Humidity...))
+
+```
+
+
+#Phase 2 - Location
+
+Now that we have taken a quick look at a majority of the variables in our data, we were able to focus on location. You will see in multiple of our worksheets that we focused in on Counties. Below we started off by graphing the counts of accidents in certain counties. For specific location we thought it would be a good idea to focus in on Counties with the highest accidents. In a real-life scenario, this could be most useful for safety issues and change. As you can see below Genesee, Wayne and Kent county were our top three locations by count of accidents.  
+
+
+
+```{r}
+
+riskcounty <- MI_accidents %>%
+  group_by(County) %>% 
+  count()
+
+summary(riskcounty)
+
+ggplot(riskcounty, aes(x=County, y = n, xlim(1000:1000000))) + geom_bar(stat = "identity") + coord_flip()
+
+```
+
+###City
+
+More specifically, we wanted to identify specific locations. So we created a dataset specifically with Cities in Genesee County. By doing this we were able to then count the accidents by city and identify the Cities with the top accident counts. Graphing that out, Flint had the highest rate of accidents by far in Gensee County. You will see later in this sheet that we did this for Wayne and Kent County as well.  
+
+```{r}
+
+Geneseecounty <- MI_accidents %>%
+  filter(County == "Genesee")%>%
+  group_by(City) %>%
+  count()
+
+  
+GeneseeCities <- MI_accidents %>%
+  filter(County=="Genesee" & City == "Flint"| City == "Grand Blanc"| City == "Burton"| City == "Davison") %>%
+  group_by(City) %>%
+  count()
+
+ggplot(GeneseeCities, aes(fill=City, x = City, y=n)) + geom_bar (stat="identity") 
+
+```
+
+
+#Phase 3 - Time
+
+With Flint in Mind, we wanted to look at an additional variable that originally didn't stand out to us, time. By looking at time we could see if there were specific patterns to when crashes were happening and if that has any specific affect. In looking at this information two things stood out. The hour and the Day that accidents were happening. A large portion of accidents were happening during the hours in which pedestrians would be going to or leaving from work. Additionally, a large portion of accidents were occuring during weekdays in comparison to weekends. 
+
+
+```{r}
+
+MI_accidents %>%
+    select(Start_Time) %>%
+    transmute(Month = month(Start_Time,
+                            label = T,
+                            locale = 'C'),
+              Year = year(Start_Time)) %>%
+    filter(Year != 2015) %>% 
+    group_by(Year, Month) %>%
+    summarise(`No of accidents` = n()) %>%
+    ggplot(aes(x = Month, y = `No of accidents`)) +
+    geom_bar(stat = 'identity') +
+    facet_grid(~Year)  +
+    theme(axis.text.x = element_text(angle = 90))
+```
+
+
+
+
+```{r}
+MI_accidents %>%
+    select(Start_Time) %>%
+    transmute(Hour = hour(Start_Time)) %>%
+    mutate(Hour = factor(as.character(Hour),
+                         levels = as.character(c(0:23)))) %>%
+    ggplot(aes(Hour)) +
+    geom_histogram(stat = 'count')
+```
+
+
+#Phase 4 - Filter
+
+Below you will see the most important part of identifying specific locations. By filtering on city and grouping by street, we were able to Identify the top locations by street that accidents were occuring at in Flint. Moreover, we were able to create a dataset strictly based around the top location (I-75.) From there we were able to count term frequency on (I-75) street descriptions. This gave us the exact intersections in which accidents occured most frequently. Below, we do this filtering and also look into most variables using Flint speicifically as the location. 
+
+```{r}
+
+# Filter out the number of accidents per street
+
+FlintStreets <- MI_accidents %>%
+  filter(City == "Flint") %>%
+  group_by(Street) %>%
+  count(sort = TRUE) %>%
+  filter(n>240)
+
+summary(FlintStreets)
+
+# largest are I 75N and S Dort Hwy
+# Use this to graph some of the presumptive causes for accidents (Time, traffic stop, month)
+
+
+```
+
+
+```{r}
+Specificlocation <- MI_accidents %>%
+  filter(City == "Flint" & Street == "I-75 N")
+
+dim(Specificlocation)
+
+
+  
+```
+
+```{r}
+Specificlocation %>%
+  select(Severity,Distance.mi.,Temperature.F.,Wind_Chill.F.,Humidity...,Pressure.in.,Visibility.mi.,Wind_Speed.mph.,Precipitation.in.) %>%
+  summary()
+```
+
+
+
+###Flint Specific weekdays and time Crash data 
+
+```{r}
+
+Specificlocation %>%
+  ggplot(aes(x = weekdays(as.Date(Specificlocation$Start_Time)))) + geom_histogram(stat = "count")
+  
+  
+```
+
+
+
+
+```{r}
+Specificlocation %>%
+    select(Start_Time) %>%
+    transmute(Hour = hour(Start_Time)) %>%
+    mutate(Hour = factor(as.character(Hour),
+                         levels = as.character(c(0:23)))) %>%
+    ggplot(aes(Hour)) +
+    geom_histogram(stat = 'count')
+```
+
+```{r}
+Streetlocflint <- MI_accidents %>%
+  filter(City == "Flint" & Street == "W Pierson Rd")
+
+dim(Streetlocflint)
+```
+
+
+```{r}
+Streettermfreq <- Streetlocflint %>%
+  count(Description, sort = TRUE)
+
+view(Streettermfreq)
+```
+
+
+```{r}
+Flintstreetcrash <- c("Amenity", "Bump", "Crossing", "Give_Way", "Junction", "No_Exit", "Railway", "Roundabout" , "Station" , "Stop", "Traffic_Calming", "Traffic_Signal" , "Turning_Loop")
+
+Flintstreetcrash <- subset(Streetlocflint, select = Flintstreetcrash)
+
+Flintstreetcrash %>%
+  group_by(Amenity, Bump, Crossing, Give_Way, Junction, No_Exit, Railway, Roundabout, Station, Stop, Traffic_Calming, Traffic_Signal, Turning_Loop) %>%
+  count()
+
+summary(Flintstreetcrash)
+```
+
+
+
+
+
+
+
+
+
+
+```{r}
+Flintcrash <- c("Amenity", "Bump", "Crossing", "Give_Way", "Junction", "No_Exit", "Railway", "Roundabout" , "Station" , "Stop", "Traffic_Calming", "Traffic_Signal" , "Turning_Loop")
+
+Flintcrash <- subset(Specificlocation, select = Flintcrash)
+
+Flintcrash %>%
+  group_by(Amenity, Bump, Crossing, Give_Way, Junction, No_Exit, Railway, Roundabout, Station, Stop, Traffic_Calming, Traffic_Signal, Turning_Loop) %>%
+  count()
+
+summary(Flintcrash)
+
+```
+
+
+```{r}
+
+termfreq <- Specificlocation %>%
+  count(Description, sort = TRUE)
+
+view(termfreq)
+
+Flintsev <- Specificlocation %>%
+  count(Severity, sort = TRUE)
+
+#As we can see, it is specific defined areas that are causing the accidents. In this case it seems that exits are the most common reason 
+
+##After looking at the Map, I69 and I-75 are merging together at the exact location of many of the highest accident locations. The timing shows that both before and after work are high density of the crashes. Additionally, with two lanes there isn't much space for merging on and off the highway. Plus there is a GM plant with over 561 employees exiting right there.Lastly, if you look at the exits going "Southbound" the turn and merge is dramatic compared to a majority you would see on I-75 in other areas. ALSO SPEED
+```
+
+
+
+
+```{r}
+
+MI_accidents %>%
+  count(Description, sort = TRUE)
+
+# Taking a look at individual roads at the top of the list we see Hill Rd at Fenton as the second highest. As we can see, this is due to the Traffic Signal in total over 100 crashes at Hill and Fenton because at a Traffic Stop. The more decision a driver has to make the higher chance of crash. One thing we see that is highly effective is Round Abouts, they are inparticularly effective because there is no distracted driving. If we would like to individually look at multiple roads I can point directly to what is causing the accident. 
+
+
+```
+
+
+
+
+#Phase4 - Continued
+
+We then went through this same process on Wayne Count and Kent County to see if there was a large difference from Genesee. In our project writeup we go indepth on what we found. 
+
+```{r}
+WayneCounty <- MI_accidents %>%
+  filter(County == "Wayne")%>%
+  group_by(City) %>%
+  count()
+
+WayneCities <- MI_accidents %>%
+  filter(County=="Wayne" & City == "Detroit"| City == "Highland Park"| City == "Plymouth"| City == "Romulus") %>%
+  group_by(City) %>%
+  count()
+
+ggplot(WayneCities, aes(fill=City, x = City, y=n)) + geom_bar (stat="identity") 
+
+
+```
+
+
+```{r}
+DetroitStreets <- MI_accidents %>%
+  filter(City == "Detroit") %>%
+  group_by(Street) %>%
+  count(sort = TRUE) %>%
+  filter(n>240)
+
+summary(DetroitStreets)
+```
+
+
+
+
+```{r}
+Detroitloc <- MI_accidents %>%
+  filter(City == "Detroit" & Street == "Edsel Ford Fwy E")
+
+dim(Specificlocation)
+```
+
+```{r}
+Detroitloc %>%
+  select(Severity,Distance.mi.,Temperature.F.,Wind_Chill.F.,Humidity...,Pressure.in.,Visibility.mi.,Wind_Speed.mph.,Precipitation.in.) %>%
+  summary()
+```
+
+
+
+```{r}
+
+DetCrash <- c("Amenity", "Bump", "Crossing", "Give_Way", "Junction", "No_Exit", "Railway", "Roundabout" , "Station" , "Stop", "Traffic_Calming", "Traffic_Signal" , "Turning_Loop")
+
+DetCrash <- subset(Detroitloc, select = DetCrash)
+
+DetCrash %>%
+  group_by(Amenity, Bump, Crossing, Give_Way, Junction, No_Exit, Railway, Roundabout, Station, Stop, Traffic_Calming, Traffic_Signal, Turning_Loop) %>%
+  count()
+
+summary(DetCrash)
+
+
+
+
+```
+
+
+```{r}
+
+DetroitFreq <- Detroitloc %>%
+  count(Description, sort = TRUE)
+
+view(DetroitFreq)
+
+```
+
+
+
+
+Kent County 
+
+
+```{r}
+
+KentCounty <- MI_accidents %>%
+  filter(County == "Kent")%>%
+  group_by(City) %>%
+  count()
+
+KentCities <- MI_accidents %>%
+  filter(County=="Kent" & City == "Grand Rapids"| City == "Wyoming"| City == "Grandville"| City == "Byron Center") %>%
+  group_by(City) %>%
+  count()
+
+ggplot(KentCities, aes(fill=City, x = City, y=n)) + geom_bar (stat="identity") 
+
+
+
+
+```
+
+
+
+```{r}
+
+GRStreets <- MI_accidents %>%
+  filter(City == "Grand Rapids") %>%
+  group_by(Street) %>%
+  count(sort = TRUE) %>%
+  filter(n>240)
+
+summary(GRStreets)
+```
+
+```{r}
+
+GRloc <- MI_accidents %>%
+  filter(City == "Grand Rapids" & Street == "US-131 S")
+
+dim(GRloc)
+
+
+
+```
+
+
+```{r}
+GRloc %>%
+  select(Severity,Distance.mi.,Temperature.F.,Wind_Chill.F.,Humidity...,Pressure.in.,Visibility.mi.,Wind_Speed.mph.,Precipitation.in.) %>%
+  summary()
+```
+
+
+
+```{r}
+GRCrash <- c("Amenity", "Bump", "Crossing", "Give_Way", "Junction", "No_Exit", "Railway", "Roundabout" , "Station" , "Stop", "Traffic_Calming", "Traffic_Signal" , "Turning_Loop")
+
+GRCrash <- subset(GRloc, select = GRCrash)
+
+GRCrash %>%
+  group_by(Amenity, Bump, Crossing, Give_Way, Junction, No_Exit, Railway, Roundabout, Station, Stop, Traffic_Calming, Traffic_Signal, Turning_Loop) %>%
+  count()
+
+summary(GRCrash)
+```
+
+
+
+```{r}
+GRFreq <- GRloc %>%
+  count(Description, sort = TRUE)
+
+view(GRFreq)
+```
+
+
