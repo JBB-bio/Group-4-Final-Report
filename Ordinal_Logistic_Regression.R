@@ -1,0 +1,89 @@
+library(caret)
+library(nnet)
+
+# Data, Set Severity as an odrinal variable
+MI_accidents <- read.delim("Michigan_Accidents_Dec19.txt")
+MI_accidents$Severity <- as.ordered(MI_accidents$Severity)
+str(MI_accidents)
+dim(MI_accidents)
+
+any(is.na(MI_accidents[]))
+sum(is.na(MI_accidents))
+colSums(is.na(MI_accidents))
+
+# Data for Wayne County only
+MI_acc_w <- subset(MI_accidents, County == "Wayne")
+head(MI_acc_w)
+str(MI_acc_w)
+dim(MI_acc_w)
+unique(MI_acc_w$County)
+(MI_acc_w$County)
+
+# Data Partition
+set.seed(100)
+ind <- sample(2, nrow(MI_acc_w), replace=TRUE, prob=c(0.7,0.3))
+train <- MI_acc_w[ind==1,]
+test <- MI_acc_w[ind==2, ]
+table(train$Severity)
+table(test$Severity)
+
+(sumtr=5+6270+8950+434)
+(6270/sumtr)+(8950/sumtr)
+(sumts=2+2608+3751+194)
+(2608/sumts)+(3751/sumts)
+
+# Ordinal Logistic Regression or Proportional Odds Logistic Regression
+library(MASS)
+ordmod <- polr(Severity ~ Start_Lat + Start_Lng + Distance.mi. +
+                 Side + Pressure.in. + Visibility.mi. +
+                 Wind_Speed.mph. + Crossing + Station + 
+                 Traffic_Signal, data=train, Hess=TRUE)
+summary(ordmod)
+
+# P-Value Calculation
+(ctable <- coef(summary(ordmod)))
+p <- pnorm(abs(ctable[,"t value"]), lower.tail=FALSE)*2
+(ctable <- cbind(ctable, "p value" = p))
+
+# Prediction
+pred_trn <- predict(ordmod, train)
+
+# Confusion Matrix and Error for Training Data
+(tab_trn <- table(pred_trn, train$Severity))
+1-sum(diag(tab_trn))/sum(tab_trn)
+
+# Confusion Matrix and Error for Testing Data
+pred_tst <- predict(ordmod, test)
+(tab_tst <- table(pred_tst, test$Severity))
+1-sum(diag(tab_tst))/sum(tab_tst)
+
+#install.packages("effects")
+library(effects)
+library(splines)
+
+png("C:\\plot1.png", width = 400, height = 480, units = "px", bg = "white")
+
+train$Severity <- droplevels(train$Severity)
+plot(x=train$Traffic_Signal, y=train$Severity)
+
+plot(Effect(focal.predictors = c("Traffic_Signal"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Start_Lat"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Start_Lng"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Pressure.in."), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Crossing"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Side"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Wind_Speed.mph."), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Station"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Visibility.mi."), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Distance.mi."), ordmod), rug=FALSE)
+
+plot(Effect(focal.predictors = c("Start_Lat","Traffic_Signal"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Start_Lng","Traffic_Signal"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Start_Lat","Start_Lng"), ordmod), rug=FALSE)
+
+plot(Effect(focal.predictors = c("Distance.mi.","Traffic_Signal"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Distance.mi.","Start_Lat"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Distance.mi.","Start_Lng"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Distance.mi.","Side"), ordmod), rug=FALSE)
+plot(Effect(focal.predictors = c("Distance.mi.","Crossing"), ordmod), rug=FALSE)
+
