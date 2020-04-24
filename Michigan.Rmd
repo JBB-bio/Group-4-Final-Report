@@ -27,7 +27,7 @@ library(lubridate) #datetime manipulation
 ```
 
 ```{r}
-register_google(key="AIzaSyCgwU7qSt5tpArZqWlaHOFJlklSUxa-ByU")
+#register_google(key="AIzaSyCgwU7qSt5tpArZqWlaHOFJlklSUxa-ByU")
 ```
 
 ```{r, include=FALSE}
@@ -131,23 +131,6 @@ levels(MI_accidents_for_severity$Severity) <- c("less severe", "less severe", "m
 MI_accidents_for_severity <- na.omit(MI_accidents_for_severity) 
 
 #write.csv(MI_accidents_for_severity,"MI_accidents_for_severity_.csv", row.names = FALSE)
-
-MI_accidents_for_severity_Genesee <-MI_accidents_for_severity[(
-  (MI_accidents_for_severity$County =="Genesee")   ),]
-
-#write.csv(MI_accidents_for_severity_Genesee,"MI_accidents_for_severity_Genesee_.csv", row.names = FALSE)
-
-MI_accidents_for_severity_Kent <-MI_accidents_for_severity[(
-  (MI_accidents_for_severity$County =="Kent")   ),]
-
-#write.csv(MI_accidents_for_severity_Kent,"MI_accidents_for_severity_Kent_.csv", row.names = FALSE)
-
-MI_accidents_for_severity_Wayne <-MI_accidents_for_severity[(
-  (MI_accidents_for_severity$County =="Wayne")   ),]
-
-#write.csv(MI_accidents_for_severity_Wayne,"C:\\Users\\David\\OneDrive\\Desktop\\DSA6000\\DS6000\\MI_accidents_for_severity_Wayne_.csv", row.names = FALSE)
-
-
 
 ```
 
@@ -486,7 +469,7 @@ test_matct<- MI_acc_time_county_top[test_matct_index ,]
 # Model p-values less tha .10 for 5 of 6 counties with the most accidents
 lm01_time_county <-with(train_matct,lm(Accidents~ Sunrise_Sunset +County, data=train_matct))
 summary(lm01_time_county)
-
+print(summary(lm01_time_county),digits=1)
 pred01_time_county <- predict(lm01_time_county,
                     newdata=data.frame(test_matct))
 lm01_test_mse <- mean((test_matct$Accidents - pred01_time_county)^2)
