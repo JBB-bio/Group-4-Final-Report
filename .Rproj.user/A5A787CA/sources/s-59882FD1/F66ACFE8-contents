@@ -26,9 +26,6 @@ library(ggmap) # Incorporates google maps, openstreetmap, stamen maps, or cloudm
 library(lubridate) #datetime manipulation
 ```
 
-```{r}
-register_google(key="AIzaSyCgwU7qSt5tpArZqWlaHOFJlklSUxa-ByU")
-```
 
 ```{r, include=FALSE}
 # Dataframes created in this code block
